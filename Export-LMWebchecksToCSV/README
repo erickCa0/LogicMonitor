@@ -1,114 +1,184 @@
-LM Uptime Export – Quick Start
+# LM Web Checks Export – Quick Start
 
-Use Export-LMUptimeCounts.ps1 to export LogicMonitor Uptime test counts into CSV files for reporting.
+Use `Export-LMWebChecks.ps1` to export LogicMonitor Web Checks (Website Checks) into CSV files for reporting.
 
-1. Prerequisites
+## 1. Prerequisites
 
 Install the LogicMonitor PowerShell module (one-time setup):
 
+```powershell
 Install-Module Logic.Monitor -Scope CurrentUser
+```
 
 You'll also need:
+- Your LogicMonitor portal name (the subdomain before `.logicmonitor.com`)
+- Authentication using either:
+  - LMv1 Access ID/Access Key
+  - Bearer Token
+  - Saved LogicMonitor credentials
+  - An existing `Connect-LMAccount` session
 
-Your LogicMonitor portal name (the subdomain before .logicmonitor.com)
-Authentication using either:
-LMv1 Access ID/Access Key
-Bearer Token
-Saved LogicMonitor credentials
-An existing Connect-LMAccount session
-2. Run the Script
-Using LMv1 Credentials
+---
+
+## 2. Run the Script
+
+### Using LMv1 Credentials
+
+```powershell
 $env:LM_ACCESS_ID = "your-access-id"
 $env:LM_ACCESS_KEY = "your-access-key"
 
-.\Export-LMUptimeCounts.ps1 `
+.\Export-LMWebChecks.ps1 `
   -AccountName "your-portal" `
   -StartMonth 2026-01 `
   -EndMonth 2026-05 `
-  -OutputDir .\exports\lm-uptime
-Using a Bearer Token
+  -OutputDir .\exports\lm-webchecks
+```
+
+### Using a Bearer Token
+
+```powershell
 $env:LM_BEARER_TOKEN = "your-token"
 
-.\Export-LMUptimeCounts.ps1 `
+.\Export-LMWebChecks.ps1 `
   -AccountName "your-portal" `
   -BearerToken $env:LM_BEARER_TOKEN `
   -StartMonth 2026-05 `
   -EndMonth 2026-05 `
-  -OutputDir .\exports\lm-uptime
+  -OutputDir .\exports\lm-webchecks
+```
 
-Note: If your portal is acme.logicmonitor.com, use:
+### Using an Existing Connection
 
--AccountName "acme"
-3. Review the Results
+```powershell
+Connect-LMAccount -AccountName "your-portal" -BearerToken $env:LM_BEARER_TOKEN
+
+.\Export-LMWebChecks.ps1 `
+  -SkipConnect `
+  -StartMonth 2026-05 `
+  -EndMonth 2026-05 `
+  -OutputDir .\exports\lm-webchecks
+```
+
+> **Note:** If your portal is `acme.logicmonitor.com`, use:
+>
+> ```powershell
+> -AccountName "acme"
+> ```
+
+---
+
+## 3. Review the Results
 
 The script creates several CSV files. Most users only need:
 
-monthly_uptime_test_counts.csv – Test counts by check
-monthly_uptime_totals.csv – Monthly totals
+- **monthly_webcheck_test_counts.csv** – Test counts by Web Check
+- **monthly_webcheck_totals.csv** – Monthly totals
 
-Additional files provide device details, datasource instances, and warnings.
+Additional files include configuration details, groups, SiteMonitor checkpoints, and warnings.
 
-4. Choose a Counting Mode
-Estimated (Recommended)
+---
 
-Fastest option. Calculates expected test counts based on polling intervals and enabled locations.
+## 4. Choose a Counting Mode
 
+### Estimated (Recommended)
+
+Fastest option. Calculates expected test counts using each Web Check's schedule and configured test locations.
+
+```powershell
 -Mode Estimated
-Both (Estimated + Actual)
+```
 
-Also retrieves stored datapoints from LogicMonitor for comparison. Slower.
+### Both (Estimated + Actual)
 
+Also retrieves stored datapoints from LogicMonitor for comparison. Slower and dependent on data retention.
+
+```powershell
 -Mode Both
-5. Common Options
-Task	Parameter
-Web checks only	-Type uptimewebcheck
-Ping checks only	-Type uptimepingcheck
-Internal checks only	-IsInternal $true
-External checks only	-IsInternal $false
-Export CSV + JSON	-OutputFormat Both
-6. Troubleshooting
+```
+
+---
+
+## 5. Common Options
+
+| Task | Parameter |
+|-------|-----------|
+| Export a single month | `-StartMonth YYYY-MM -EndMonth YYYY-MM` |
+| Export multiple months | Set different `StartMonth` and `EndMonth` |
+| Change output folder | `-OutputDir <path>` |
+| Filter exported checks | `-Filter @{ name = "checkout" }` *(if supported)* |
+| Export CSV + JSON | `-OutputFormat Both` *(if supported)* |
+
+---
+
+## 6. Troubleshooting
 
 If counts seem incorrect:
 
-Check uptime_warnings.csv.
-By default, missing polling intervals assume 5 minutes.
-Override if needed:
--DefaultIntervalMinutes 10
+1. Check **`webcheck_warnings.csv`**.
+2. Common causes include:
+   - Missing polling intervals
+   - Inherited group settings
+   - Disabled Web Checks
+   - Unresolved test locations
+   - Using Actual mode for data outside LogicMonitor's retention period
 
-Or specify custom polling interval properties:
+If supported, override the default polling interval:
 
--PollingIntervalProperties @("my.custom.interval","pollingInterval")
-7. If the Script Won't Run
+```powershell
+-DefaultIntervalMinutes 5
+```
 
-Scripts are blocked
+---
 
+## 7. If the Script Won't Run
+
+**Scripts are blocked**
+
+```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
 
-LogicMonitor module not found
+**LogicMonitor module not found**
 
+```powershell
 Install-Module Logic.Monitor -Scope CurrentUser
 Import-Module Logic.Monitor
+```
 
-Authentication errors
+**Authentication errors**
 
 Verify:
+- `-AccountName` is only the portal subdomain.
+- Your credentials are valid.
+- Your account has permission to read Web Checks.
+- Tokens or keys haven't expired.
 
--AccountName is only the portal subdomain.
-Your credentials have read access.
-Tokens or keys haven't expired.
-8. Test Before Running Large Reports
+---
+
+## 8. Test Before Running Large Reports
 
 Run a single month first:
 
-.\Export-LMUptimeCounts.ps1 `
+```powershell
+.\Export-LMWebChecks.ps1 `
   -AccountName "your-portal" `
   -BearerToken $env:LM_BEARER_TOKEN `
   -StartMonth 2026-05 `
   -EndMonth 2026-05 `
-  -OutputDir .\exports\lm-uptime-test
+  -OutputDir .\exports\webcheck-test
+```
 
 Then review:
 
-.\exports\lm-uptime-test\monthly_uptime_totals.csv
+```text
+.\exports\webcheck-test\monthly_webcheck_totals.csv
+```
 
 If the results look correct, rerun with your full date range.
+
+---
+
+## Notes
+
+This README assumes `Export-LMWebChecks.ps1` uses the same parameters and output naming conventions as `Export-LMUptimeCounts.ps1`. If the script differs, update the examples accordingly.
