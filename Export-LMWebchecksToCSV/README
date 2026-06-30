@@ -1,0 +1,248 @@
+# LM Uptime Export
+
+This guide is for running `Export-LMUptimeCounts.ps1` without needing to know
+the full LogicMonitor API details.
+
+The script looks at your LogicMonitor LM Uptime checks, figures out how often
+they run, and creates CSV files you can open in Excel or share with others.
+
+## What You Need First
+
+You need PowerShell and the official LogicMonitor PowerShell module.
+
+Install the module once:
+
+```powershell
+Install-Module Logic.Monitor -Scope CurrentUser
+```
+
+You also need LogicMonitor API credentials. You can use either:
+
+- LMv1 `AccessId` and `AccessKey`
+- A bearer token
+- A saved LogicMonitor credential
+- An already-open `Connect-LMAccount` session
+
+## Fastest Way To Run It
+
+If you have LMv1 credentials:
+
+```powershell
+$env:LM_ACCESS_ID = "your-access-id"
+$env:LM_ACCESS_KEY = "your-access-key"
+
+.\Export-LMUptimeCounts.ps1 `
+  -AccountName "your-portal-name" `
+  -StartMonth 2026-01 `
+  -EndMonth 2026-05 `
+  -OutputDir .\exports\lm-uptime
+```
+
+Replace `your-portal-name` with the part before `.logicmonitor.com`.
+
+For example, if your portal is:
+
+```text
+acme.logicmonitor.com
+```
+
+then use:
+
+```powershell
+-AccountName "acme"
+```
+
+## If You Use A Bearer Token
+
+```powershell
+$env:LM_BEARER_TOKEN = "your-bearer-token"
+
+.\Export-LMUptimeCounts.ps1 `
+  -AccountName "your-portal-name" `
+  -BearerToken $env:LM_BEARER_TOKEN `
+  -StartMonth 2026-05 `
+  -EndMonth 2026-05 `
+  -OutputDir .\exports\lm-uptime
+```
+
+## What The Script Creates
+
+The script creates CSV files by default.
+
+The most useful files are:
+
+- `monthly_uptime_test_counts.csv`
+  Shows each LM Uptime check and how many tests it ran per month.
+
+- `monthly_uptime_totals.csv`
+  Shows monthly totals across all checks.
+
+- `uptime_devices.csv`
+  Lists the LM Uptime devices found in the portal.
+
+- `uptime_datasource_instances.csv`
+  Lists the individual locations or instances used for counting.
+
+- `uptime_warnings.csv`
+  Lists anything the script had to guess or skip.
+
+If you only need test counts, start with:
+
+```text
+monthly_uptime_test_counts.csv
+monthly_uptime_totals.csv
+```
+
+## Estimated Counts vs Actual Counts
+
+By default, the script uses estimated counts.
+
+That means it calculates:
+
+```text
+how many times the check should run in the month
+*
+how many enabled locations or instances it has
+```
+
+This is fast and usually what you want for reporting.
+
+Run estimated mode like this:
+
+```powershell
+.\Export-LMUptimeCounts.ps1 `
+  -AccountName "your-portal-name" `
+  -BearerToken $env:LM_BEARER_TOKEN `
+  -Mode Estimated `
+  -StartMonth 2026-05 `
+  -EndMonth 2026-05
+```
+
+Actual mode asks LogicMonitor for stored datapoints and counts what comes back.
+It is slower and depends on how much data LogicMonitor still has retained.
+
+Use actual mode only when you need to compare expected runs to returned data:
+
+```powershell
+.\Export-LMUptimeCounts.ps1 `
+  -AccountName "your-portal-name" `
+  -BearerToken $env:LM_BEARER_TOKEN `
+  -Mode Both `
+  -StartMonth 2026-05 `
+  -EndMonth 2026-05
+```
+
+## Common Things You Might Want To Change
+
+Only export web uptime checks:
+
+```powershell
+.\Export-LMUptimeCounts.ps1 `
+  -AccountName "your-portal-name" `
+  -BearerToken $env:LM_BEARER_TOKEN `
+  -Type uptimewebcheck
+```
+
+Only export ping uptime checks:
+
+```powershell
+.\Export-LMUptimeCounts.ps1 `
+  -AccountName "your-portal-name" `
+  -BearerToken $env:LM_BEARER_TOKEN `
+  -Type uptimepingcheck
+```
+
+Only export internal checks:
+
+```powershell
+.\Export-LMUptimeCounts.ps1 `
+  -AccountName "your-portal-name" `
+  -BearerToken $env:LM_BEARER_TOKEN `
+  -IsInternal $true
+```
+
+Only export external checks:
+
+```powershell
+.\Export-LMUptimeCounts.ps1 `
+  -AccountName "your-portal-name" `
+  -BearerToken $env:LM_BEARER_TOKEN `
+  -IsInternal $false
+```
+
+Write JSON files too:
+
+```powershell
+.\Export-LMUptimeCounts.ps1 `
+  -AccountName "your-portal-name" `
+  -BearerToken $env:LM_BEARER_TOKEN `
+  -OutputFormat Both
+```
+
+## If The Counts Look Wrong
+
+Open `uptime_warnings.csv` first.
+
+The most common reason is that the script could not find a polling interval on
+one or more devices. When that happens, it uses `5` minutes as the default.
+
+You can change the fallback:
+
+```powershell
+.\Export-LMUptimeCounts.ps1 `
+  -AccountName "your-portal-name" `
+  -BearerToken $env:LM_BEARER_TOKEN `
+  -DefaultIntervalMinutes 10
+```
+
+If your portal stores the polling interval in a custom property, tell the
+script the property name:
+
+```powershell
+.\Export-LMUptimeCounts.ps1 `
+  -AccountName "your-portal-name" `
+  -BearerToken $env:LM_BEARER_TOKEN `
+  -PollingIntervalProperties @("my.custom.interval", "pollingInterval")
+```
+
+## If The Script Does Not Run
+
+If PowerShell says scripts are blocked:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+If the LogicMonitor commands are not found:
+
+```powershell
+Install-Module Logic.Monitor -Scope CurrentUser
+Import-Module Logic.Monitor
+```
+
+If authentication fails, confirm:
+
+- Your portal name is only the subdomain, not the full URL.
+- Your API credential has read permissions.
+- Your token or access key has not expired or been rotated.
+
+## Quick Sanity Check
+
+Before running a big report, test one month first:
+
+```powershell
+.\Export-LMUptimeCounts.ps1 `
+  -AccountName "your-portal-name" `
+  -BearerToken $env:LM_BEARER_TOKEN `
+  -StartMonth 2026-05 `
+  -EndMonth 2026-05 `
+  -OutputDir .\exports\lm-uptime-test
+```
+
+Then open:
+
+```text
+.\exports\lm-uptime-test\monthly_uptime_totals.csv
+```
+
+If the totals look reasonable, run the wider date range.
